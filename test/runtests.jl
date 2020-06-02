@@ -21,7 +21,7 @@ end
 
     # record what we want to test
     signatures = Set()
-    types = [String, IOStream, Base.Process]
+    types = [String, Cmd, Base.CmdRedirect, IOStream, Base.Process]
     for S in types
         push!(signatures, Tuple{S})
         for D in types

@@ -5,12 +5,14 @@ export
     arg_write, ArgWrite, arg_writers,
     @arg_test
 
+import Base: AbstractCmd
+
 ## main API ##
 
-const ArgRead  = Union{AbstractString, IO}
-const ArgWrite = Union{AbstractString, IO}
+const ArgRead  = Union{AbstractString, AbstractCmd, IO}
+const ArgWrite = Union{AbstractString, AbstractCmd, IO}
 
-arg_read(f::Function, arg::AbstractString) = open(f, arg)
+arg_read(f::Function, arg::ArgRead) = open(f, arg)
 arg_read(f::Function, arg::IO) = f(arg)
 
 function arg_write(f::Function, arg::AbstractString)
@@ -19,6 +21,11 @@ function arg_write(f::Function, arg::AbstractString)
         rm(arg, force=true)
         rethrow()
     end
+    return arg
+end
+
+function arg_write(f::Function, arg::AbstractCmd)
+    open(f, arg, write=true)
     return arg
 end
 
@@ -59,12 +66,16 @@ arg_test(ex::Expr) = esc(ex)
 
 arg_readers(path::AbstractString) = [
     f -> f(path)
+    f -> f(`cat $path`)
+    f -> f(pipeline(path, `cat`))
     f -> open(f, path)
     f -> open(f, `cat $path`)
 ]
 
 arg_writers(path::AbstractString) = [
     f -> f(path)
+    f -> f(`tee $path`)
+    f -> f(pipeline(`cat`, path))
     f -> open(f, path, write=true)
     f -> open(f, pipeline(`cat`, path), write=true)
 ]
