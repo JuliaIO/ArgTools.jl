@@ -1,8 +1,9 @@
 module ArgTools
 
 export
-    arg_read,  ArgRead,
-    arg_write, ArgWrite
+    arg_read,  ArgRead,  arg_readers,
+    arg_write, ArgWrite, arg_writers,
+    @arg_test
 
 ## main API ##
 
@@ -40,5 +41,32 @@ function arg_write(f::Function, arg::IO)
     end
     return arg
 end
+
+## test utilities ##
+
+macro arg_test(args...)
+    arg_test(args...)
+end
+
+function arg_test(var::Symbol, args...)
+    var = esc(var)
+    body = arg_test(args...)
+    :($var($var -> $body))
+end
+arg_test(ex::Expr) = esc(ex)
+
+# core arg_{readers,writers} methods
+
+arg_readers(path::AbstractString) = [
+    f -> f(path)
+    f -> open(f, path)
+    f -> open(f, `cat $path`)
+]
+
+arg_writers(path::AbstractString) = [
+    f -> f(path)
+    f -> open(f, path, write=true)
+    f -> open(f, pipeline(`cat`, path), write=true)
+]
 
 end # module

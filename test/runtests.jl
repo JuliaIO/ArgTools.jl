@@ -1,5 +1,5 @@
-using ArgTools
 using Test
+using ArgTools
 
 function send_data(src::ArgRead, dst::Union{ArgWrite, Nothing} = nothing)
     arg_read(src) do src_io
@@ -15,52 +15,43 @@ end
 
 @testset "ArgTools.jl" begin
     # create a source file
-    src = tempname()
+    src_file = tempname()
     data = rand(UInt8, 666)
-    write(src, data)
+    write(src_file, data)
 
-    # test send_data(src::String)
-    dst = send_data(src)
-    @test data == read(dst)
-    rm(dst)
-
-    # test send_data(src::IO)
-    dst = open(send_data, src)
-    @test data == read(dst)
-    rm(dst)
-
-    # test send_data(src::String, dst::String)
-    dst = tempname()
-    @test dst == send_data(src, dst)
-    @test data == read(dst)
-    rm(dst)
-
-    # test send_data(src::IO, dst::String)
-    dst = tempname()
-    @test dst == open(src) do src
-        send_data(src, dst)
-    end
-    @test data == read(dst)
-    rm(dst)
-
-    # test send_data(src::String, dst::IO)
-    dst = tempname()
-    open(dst, write=true) do dst
-        send_data(src, dst)
-    end
-    @test data == read(dst)
-    rm(dst)
-
-    # test send_data(src::IO, dst::IO)
-    dst = tempname()
-    open(src) do src
-        open(dst, write=true) do dst
-            send_data(src, dst)
+    # record what we want to test
+    signatures = Set()
+    types = [String, IOStream, Base.Process]
+    for S in types
+        push!(signatures, Tuple{S})
+        for D in types
+            push!(signatures, Tuple{S,D})
         end
     end
-    @test data == read(dst)
-    rm(dst)
+
+    for src in arg_readers(src_file)
+        @arg_test src begin
+            pop!(signatures, Tuple{typeof(src)})
+            dst_file = send_data(src)
+            @test data == read(dst_file)
+            rm(dst_file)
+        end
+
+        dst_file = tempname()
+        for dst in arg_writers(dst_file)
+            @test !ispath(dst_file)
+            @arg_test src dst begin
+                pop!(signatures, Tuple{typeof(src), typeof(dst)})
+                @test dst == send_data(src, dst)
+            end
+            @test data == read(dst_file)
+            rm(dst_file)
+        end
+    end
+
+    # test that we tested all signatures
+    @test isempty(signatures)
 
     # cleanup
-    rm(src)
+    rm(src_file)
 end
