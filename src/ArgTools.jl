@@ -1,25 +1,27 @@
 module ArgTools
 
 export
-    arg_read, ArgRead,
+    arg_read,  ArgRead,
     arg_write, ArgWrite
+
+## main API ##
 
 const ArgRead  = Union{AbstractString, IO}
 const ArgWrite = Union{AbstractString, IO}
 
-arg_read(f::Function, file::AbstractString) = open(f, file)
-arg_read(f::Function, file::IO) = f(file)
+arg_read(f::Function, arg::AbstractString) = open(f, arg)
+arg_read(f::Function, arg::IO) = f(arg)
 
-function arg_write(f::Function, file::AbstractString)
-    try open(f, file, write=true)
+function arg_write(f::Function, arg::AbstractString)
+    try open(f, arg, write=true)
     catch
-        rm(file, force=true)
+        rm(arg, force=true)
         rethrow()
     end
-    return file
+    return arg
 end
 
-function arg_write(f::Function, file::Nothing)
+function arg_write(f::Function, arg::Nothing)
     file, io = mktemp()
     try f(io)
     catch
@@ -31,12 +33,12 @@ function arg_write(f::Function, file::Nothing)
     return file
 end
 
-function arg_write(f::Function, file::IO)
-    try f(file)
+function arg_write(f::Function, arg::IO)
+    try f(arg)
     finally
-        flush(file)
+        flush(arg)
     end
-    return file
+    return arg
 end
 
 end # module
