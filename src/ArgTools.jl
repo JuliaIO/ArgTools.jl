@@ -69,4 +69,24 @@ arg_writers(path::AbstractString) = [
     f -> open(f, pipeline(`cat`, path), write=true)
 ]
 
+# higher-order arg_{readers,writers} methods
+
+function arg_readers(body::Function, path::AbstractString)
+    foreach(body, arg_readers(path))
+end
+
+function arg_writers(body::Function, path::AbstractString)
+    foreach(body, arg_writers(path))
+end
+
+function arg_writers(body::Function)
+    path = tempname()
+    map(arg_writers(path)) do writer
+        try body(path, writer)
+        finally
+            rm(path, force=true)
+        end
+    end
+end
+
 end # module

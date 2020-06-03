@@ -29,7 +29,7 @@ end
         end
     end
 
-    for src in arg_readers(src_file)
+    arg_readers(src_file) do src
         @arg_test src begin
             pop!(signatures, Tuple{typeof(src)})
             dst_file = send_data(src)
@@ -37,15 +37,13 @@ end
             rm(dst_file)
         end
 
-        dst_file = tempname()
-        for dst in arg_writers(dst_file)
+        arg_writers() do dst_file, dst
             @test !ispath(dst_file)
             @arg_test src dst begin
                 pop!(signatures, Tuple{typeof(src), typeof(dst)})
                 @test dst == send_data(src, dst)
             end
             @test data == read(dst_file)
-            rm(dst_file)
         end
     end
 
