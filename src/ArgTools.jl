@@ -1,25 +1,84 @@
 module ArgTools
 
 export
-    arg_read, ArgRead,
-    arg_write, ArgWrite
+    arg_read,  ArgRead,  arg_readers,
+    arg_write, ArgWrite, arg_writers,
+    @arg_test
 
-const ArgRead  = Union{AbstractString, IO}
-const ArgWrite = Union{AbstractString, IO}
+import Base: AbstractCmd, CmdRedirect, Process
 
-arg_read(f::Function, file::AbstractString) = open(f, file)
-arg_read(f::Function, file::IO) = f(file)
+## main API ##
 
-function arg_write(f::Function, file::AbstractString)
-    try open(f, file, write=true)
+"""
+    ArgRead = Union{AbstractString, AbstractCmd, IO}
+
+The `ArgRead` types is a union of the types that the `arg_read` function knows
+how to convert into readable IO handles. See [`arg_read`](@ref) for details.
+"""
+const ArgRead = Union{AbstractString, AbstractCmd, IO}
+
+"""
+    ArgWrite = Union{AbstractString, AbstractCmd, IO}
+
+The `ArgWrite` types is a union of the types that the `arg_write` function knows
+how to convert into writeable IO handles, except for `Nothing` which `arg_write`
+handles by generating a temporary file. See [`arg_write`](@ref) for details.
+"""
+const ArgWrite = Union{AbstractString, AbstractCmd, IO}
+
+"""
+    arg_read(f::Function, arg::ArgRead) -> f(arg_io)
+
+The `arg_read` function accepts an argument `arg` that can be any of these:
+
+- `AbstractString`: a file path to be opened for reading
+- `AbstractCmd`: a command to be run, reading from its standard output
+- `IO`: an open IO handle to be read from
+
+Whether the body returns normally or throws an error, a path which is opened
+will be closed before returning from `arg_read` and an `IO` handle will be
+flushed but not closed before returning from `arg_read`.
+"""
+arg_read(f::Function, arg::ArgRead) = open(f, arg)
+arg_read(f::Function, arg::IO) = f(arg)
+
+"""
+    arg_write(f::Function, arg::ArgWrite) -> arg
+    arg_write(f::Function, arg::Nothing) -> tempname()
+
+The `arg_read` function accepts an argument `arg` that can be any of these:
+
+- `AbstractString`: a file path to be opened for writing
+- `AbstractCmd`: a command to be run, writing to its standard input
+- `IO`: an open IO handle to be written to
+- `Nothing`: a temporary path should be written to
+
+If the body returns normally, a path that is opened will be closed upon
+completion; an IO handle argument is left open but flushed before return. If the
+argument is `nothing` then a temporary path is opened for writing and closed
+open completion and the path is returned from `arg_write`. In all other cases,
+`arg` itself is returned. This is a useful pattern since you can consistently
+return whatever was written, whether an argument was passed or not.
+
+If there is an error during the evaluation of the body, a path that is opened by
+`arg_write` for writing will be deleted, whether it's passed in as a string or a
+temporary path generated when `arg` is `nothing`.
+"""
+function arg_write(f::Function, arg::AbstractString)
+    try open(f, arg, write=true)
     catch
-        rm(file, force=true)
+        rm(arg, force=true)
         rethrow()
     end
-    return file
+    return arg
 end
 
-function arg_write(f::Function, file::Nothing)
+function arg_write(f::Function, arg::AbstractCmd)
+    open(f, arg, write=true)
+    return arg
+end
+
+function arg_write(f::Function, arg::Nothing)
     file, io = mktemp()
     try f(io)
     catch
@@ -31,12 +90,148 @@ function arg_write(f::Function, file::Nothing)
     return file
 end
 
-function arg_write(f::Function, file::IO)
-    try f(file)
+function arg_write(f::Function, arg::IO)
+    try f(arg)
     finally
-        flush(file)
+        flush(arg)
     end
-    return file
+    return arg
 end
+
+## test utilities ##
+
+const ARG_READERS = [
+    String      => path -> f -> f(path)
+    Cmd         => path -> f -> f(`cat $path`)
+    CmdRedirect => path -> f -> f(pipeline(path, `cat`))
+    IOStream    => path -> f -> open(f, path)
+    Process     => path -> f -> open(f, `cat $path`)
+]
+
+const ARG_WRITERS = [
+    String      => path -> f -> f(path)
+    Cmd         => path -> f -> f(`tee $path`)
+    CmdRedirect => path -> f -> f(pipeline(`cat`, path))
+    IOStream    => path -> f -> open(f, path, write=true)
+    Process     => path -> f -> open(f, pipeline(`cat`, path), write=true)
+]
+
+@assert all(t <: ArgRead  for t in map(first, ARG_READERS))
+@assert all(t <: ArgWrite for t in map(first, ARG_WRITERS))
+
+"""
+    arg_readers(arg :: AbstractString, [ type = ArgRead ]) do arg::Function
+        ## pre-test setup ##
+        @arg_test arg begin
+            arg :: ArgRead
+            ## test using `arg` ##
+        end
+        ## post-test cleanup ##
+    end
+
+The `arg_readers` function takes a path to be read and a single-argument do
+block, which is invoked once for each test reader type that `arg_read` can
+handle. If the optional `type` argument is given then the do block is only
+invoked for readers that produce arguments of that type.
+
+The `arg` passed to the do block is not the argument value itself, because some
+of test argument types need to be initialized and finalized for each test case.
+Consider an open file handle argument: once you've used it for one test, you
+can't use it again; you need to close it and open the file again for the next
+test. This function `arg` can be converted into an `ArgRead` instance using
+`@test_arg arg begin ... end`.
+"""
+function arg_readers(
+    body::Function,
+    path::AbstractString,
+    type::Type = ArgRead,
+)
+    for (t, reader) in ARG_READERS
+        t <: type || continue
+        body(reader(path))
+    end
+end
+
+"""
+    arg_writers([ type = ArgWrite ]) do path::String, arg::Function
+        ## pre-test setup ##
+        @arg_test arg begin
+            arg :: ArgWrite
+            ## test using `arg` ##
+        end
+        ## post-test cleanup ##
+    end
+
+The `arg_writers` function takes a do block, which is invoked once for each test
+writer type that `arg_write` can handle with a temporary (non-existent) `path`
+and `arg` which can be converted into various writable argument types which
+write to `path`. If the optional `type` argument is given then the do block is
+only invoked for writers that produce arguments of that type.
+
+The `arg` passed to the do block is not the argument value itself, because some
+of test argument types need to be initialized and finalized for each test case.
+Consider an open file handle argument: once you've used it for one test, you
+can't use it again; you need to close it and open the file again for the next
+test. This function `arg` can be converted into an `ArgWrite` instance using
+`@test_arg arg begin ... end`.
+
+There is also an `arg_writers` method that takes a path name like `arg_readers`:
+
+    arg_writers(path::AbstractString, [ type = ArgWrite ]) do arg::Function
+        ## pre-test setup ##
+        @arg_test arg begin
+            # here `arg :: ArgWrite`
+            ## test using `arg` ##
+        end
+        ## post-test cleanup ##
+    end
+
+This method is useful if you need to specify `path` instead of using path name
+generated by `tempname()`. Since `path` is passed from outside of `arg_writers`,
+the path is not an argument to the do block in this form.
+"""
+function arg_writers(
+    body::Function,
+    type::Type = ArgWrite,
+)
+    for (t, writer) in ARG_WRITERS
+        t <: type || continue
+        path = tempname()
+        try body(path, writer(path))
+        finally
+            rm(path, force=true)
+        end
+    end
+end
+
+function arg_writers(
+    body::Function,
+    path::AbstractString,
+    type::Type = ArgWrite,
+)
+    for (t, writer) in ARG_WRITERS
+        t <: type || continue
+        body(writer(path))
+    end
+end
+
+"""
+    @arg_test arg1 arg2 ... body
+
+The `@arg_test` macro is used to convert `arg` functions provided by
+`arg_readers` and `arg_writers` into actual argument values. When you write
+`@arg_test arg body` it is equivalent to `arg(arg -> body)`.
+"""
+macro arg_test(args...)
+    arg_test(args...)
+end
+
+function arg_test(var::Symbol, args...)
+    var = esc(var)
+    body = arg_test(args...)
+    :($var($var -> $body))
+end
+
+arg_test(ex::Expr) = esc(ex)
 
 end # module
