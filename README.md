@@ -1,7 +1,7 @@
 # ArgTools
 
-[![Build Status](https://travis-ci.org/StefanKarpinski/ArgTools.jl.svg?branch=master)](https://travis-ci.org/StefanKarpinski/ArgTools.jl)
-[![Codecov](https://codecov.io/gh/StefanKarpinski/ArgTools.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/StefanKarpinski/ArgTools.jl)
+[![Build Status](https://travis-ci.org/JuliaIO/ArgTools.jl.svg?branch=master)](https://travis-ci.org/JuliaIO/ArgTools.jl)
+[![Codecov](https://codecov.io/gh/JuliaIO/ArgTools.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaIO/ArgTools.jl)
 
 `ArgTools` provides tools for creating consistent, flexible APIs that work with
 various kinds of function arguments. In the current version, it helps deal with
