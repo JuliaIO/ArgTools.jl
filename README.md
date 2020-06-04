@@ -170,7 +170,7 @@ arg_write(f::Function, arg::ArgWrite) -> arg
 arg_write(f::Function, arg::Nothing) -> tempname()
 ```
 
-The `arg_read` function accepts an argument `arg` that can be any of these:
+The `arg_write` function accepts an argument `arg` that can be any of these:
 
 - `AbstractString`: a file path to be opened for writing
 - `AbstractCmd`: a command to be run, writing to its standard input
