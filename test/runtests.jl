@@ -45,6 +45,17 @@ end
             end
             @test data == read(dst_file)
         end
+
+        # also use the method that takes a path
+        dst_file = tempname()
+        arg_writers(dst_file) do dst
+            @test !ispath(dst_file)
+            @arg_test src dst begin
+                @test dst == send_data(src, dst)
+            end
+            @test data == read(dst_file)
+            rm(dst_file)
+        end
     end
 
     # test that we tested all signatures
