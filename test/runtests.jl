@@ -75,7 +75,7 @@ Base.eof(::ErrIO) = false
 Base.write(::ErrIO, ::UInt8) = error("boom")
 Base.read(::ErrIO, ::Type{UInt8}) = error("bam")
 
-import Base.Filesystem: TEMP_CLEANUP, temp_cleanup_purge
+import Base.Filesystem: TEMP_CLEANUP
 
 @testset "error cleanup" begin
     @testset "arg_write(path)" begin
@@ -84,10 +84,14 @@ import Base.Filesystem: TEMP_CLEANUP, temp_cleanup_purge
         @test !isfile(dst)
     end
     @testset "arg_write(nothing)" begin
-        temp_cleanup_purge(false)
-        @test length(TEMP_CLEANUP) == 0
-        @test_throws ErrorException send_data(ErrIO())
-        @test length(TEMP_CLEANUP) == 1
-        @test !ispath(first(keys(TEMP_CLEANUP)))
+        SAVE_TEMP_CLEANUP = copy(TEMP_CLEANUP)
+        empty!(TEMP_CLEANUP)
+        try
+            @test_throws ErrorException send_data(ErrIO())
+            @test length(TEMP_CLEANUP) == 1
+            @test !ispath(first(keys(TEMP_CLEANUP)))
+        finally
+            merge!(TEMP_CLEANUP, SAVE_TEMP_CLEANUP)
+        end
     end
 end
