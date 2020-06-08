@@ -139,7 +139,7 @@ of test argument types need to be initialized and finalized for each test case.
 Consider an open file handle argument: once you've used it for one test, you
 can't use it again; you need to close it and open the file again for the next
 test. This function `arg` can be converted into an `ArgRead` instance using
-`@test_arg arg begin ... end`.
+`@arg_test arg begin ... end`.
 """
 function arg_readers(
     body::Function,
@@ -173,7 +173,7 @@ of test argument types need to be initialized and finalized for each test case.
 Consider an open file handle argument: once you've used it for one test, you
 can't use it again; you need to close it and open the file again for the next
 test. This function `arg` can be converted into an `ArgWrite` instance using
-`@test_arg arg begin ... end`.
+`@arg_test arg begin ... end`.
 
 There is also an `arg_writers` method that takes a path name like `arg_readers`:
 
