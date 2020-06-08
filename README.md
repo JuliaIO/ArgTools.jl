@@ -10,105 +10,6 @@ user to specify directly as file names, commands, pipelines, or, of course, as
 raw IO handles. For write arguments, it's also possible to use `nothing` and
 write to a temporary file whose path is returned.
 
-## Usage Example
-
-The best explanation may be an example, which is also used for testing:
-
-```jl
-using ArgTools
-
-function send_data(src::ArgRead, dst::Union{ArgWrite, Nothing} = nothing)
-    arg_read(src) do src_io
-        arg_write(dst) do dst_io
-            buffer = Vector{UInt8}(undef, 2*1024*1024)
-            while !eof(src_io)
-                n = readbytes!(src_io, buffer)
-                write(dst_io, view(buffer, 1:n))
-            end
-        end
-    end
-end
-```
-
-This defines the `send_data` function which reads data from a source and writes
-it to a destination, specified by the `src` and `dst` arguments, respectively.
-Thanks to `ArgTools`, this relatively simple definition acts as a swiss-army
-knife for sending data from a source to a destination. Here are some examples:
-
-```jl
-julia> cd(mktempdir())
-
-julia> write("hello.txt", "Hello, world.\n")
-14
-
-julia> run(`cat hello.txt`);
-Hello, world.
-
-julia> send_data("hello.txt", "hello_copy.txt")
-"hello_copy.txt"
-
-julia> run(`cat $ans`);
-Hello, world.
-
-julia> rm("hello_copy.txt")
-
-julia> send_data("hello.txt", stdout);
-Hello, world.
-
-julia> send_data("hello.txt", pipeline(`gzip -9`, "hello.gz"));
-
-julia> run(`gzcat hello.gz`);
-Hello, world.
-
-julia> hello_copy = send_data(`gzcat hello.gz`)
-"/var/folders/4g/b8p546px3nd550b3k288mhp80000gp/T/jl_cguepi"
-
-julia> run(`cat $hello_copy`);
-Hello, world.
-```
-
-To understand the definition of `send_data`, let's work from the inside out:
-
-* The main body of the function operates on the `src_io` and `dst_io` IO
-  handles, using a buffer to read data from the former to the latter in 2MiB
-  blocks.
-
-* The calls to `arg_read` and `arg_write` transform the `src` and `dst`
-  arguments from various types to `src_io` and `dst_io` IO handles. This allows
-  the inner body to handle the core case of dealing with IO handles, without
-  having to worry about the various possible incoming argument types. See the API
-  section below for more details about how `arg_read` and `arg_write` work on
-  different types.
-
-* The arguments to `send_data` are `src::ArgRead` and `dst::ArgWrite` where
-  `dst` is optional and defaults to `nothing` if not given. The `ArgRead` type is
-  a union including all the types that `arg_read` knows how to handle. Similarly,
-  the `ArgWrite` type is a union including the types that `arg_write` knows how to
-  handle, except for `nothing` which must be explicitly opted into, for which
-  `arg_write` creates a temporary file and returns its path.
-
-Taken altogether, this allows the `send_data` function to work with a combinatoral
-explosion of type signatures:
-
-* `send_data(src::AbstractString)`
-* `send_data(src::AbstractCmd)`
-* `send_data(src::IO)`
-* `send_data(src::AbstractString, dst::AbstractString)`
-* `send_data(src::AbstractCmd,    dst::AbstractString)`
-* `send_data(src::IO,             dst::AbstractString)`
-* `send_data(src::AbstractString, dst::AbstractCmd)`
-* `send_data(src::AbstractCmd,    dst::AbstractCmd)`
-* `send_data(src::IO,             dst::AbstractCmd)`
-* `send_data(src::AbstractString, dst::IO)`
-* `send_data(src::AbstractCmd,    dst::IO)`
-* `send_data(src::IO,             dst::IO)`
-
-Each combination guarantees the proper initialization and cleanup of its
-arguments whether it is opening a file and closing it upon completion or error,
-or creating a temporary output file and returning it upon completion or deleting
-it on error. If the arguments are commands or pipelines, those are correctly
-opened with the necessary read/write options.
-
 ## API
 
 There are two parts to the `ArgTools` API:
@@ -280,12 +181,119 @@ The `@arg_test` macro is used to convert `arg` functions provided by
 
 <!-- END: copied from inline doc strings -->
 
-## Testing Example
+## Examples
 
-Since the testing API is more complex than the `ArgTest` usage API, here is an
-example of testing the `send_data` function followed by explanation. The example
-assumes that the above definition of `send_data` has already been evaluated in
-the same Julia session.
+The examples, like the API, are split into two parts:
+
+1. An example of defining a function with a flexible API using the main API;
+2. Examples of how to thoroughly test that function using the test utilities.
+
+### Usage Example
+
+The best explanation may be an example, which is also used for testing:
+
+```jl
+using ArgTools
+
+function send_data(src::ArgRead, dst::Union{ArgWrite, Nothing} = nothing)
+    arg_read(src) do src_io
+        arg_write(dst) do dst_io
+            buffer = Vector{UInt8}(undef, 2*1024*1024)
+            while !eof(src_io)
+                n = readbytes!(src_io, buffer)
+                write(dst_io, view(buffer, 1:n))
+            end
+        end
+    end
+end
+```
+
+This defines the `send_data` function which reads data from a source and writes
+it to a destination, specified by the `src` and `dst` arguments, respectively.
+Thanks to `ArgTools`, this relatively simple definition acts as a swiss-army
+knife for sending data from a source to a destination. Here are some examples:
+
+```jl
+julia> cd(mktempdir())
+
+julia> write("hello.txt", "Hello, world.\n")
+14
+
+julia> run(`cat hello.txt`);
+Hello, world.
+
+julia> send_data("hello.txt", "hello_copy.txt")
+"hello_copy.txt"
+
+julia> run(`cat $ans`);
+Hello, world.
+
+julia> rm("hello_copy.txt")
+
+julia> send_data("hello.txt", stdout);
+Hello, world.
+
+julia> send_data("hello.txt", pipeline(`gzip -9`, "hello.gz"));
+
+julia> run(`gzcat hello.gz`);
+Hello, world.
+
+julia> hello_copy = send_data(`gzcat hello.gz`)
+"/var/folders/4g/b8p546px3nd550b3k288mhp80000gp/T/jl_cguepi"
+
+julia> run(`cat $hello_copy`);
+Hello, world.
+```
+
+To understand the definition of `send_data`, let's work from the inside out:
+
+* The main body of the function operates on the `src_io` and `dst_io` IO
+  handles, using a buffer to read data from the former to the latter in 2MiB
+  blocks.
+
+* The calls to `arg_read` and `arg_write` transform the `src` and `dst`
+  arguments from various types to `src_io` and `dst_io` IO handles. This allows
+  the inner body to handle the core case of dealing with IO handles, without
+  having to worry about the various possible incoming argument types. See the API
+  section below for more details about how `arg_read` and `arg_write` work on
+  different types.
+
+* The arguments to `send_data` are `src::ArgRead` and `dst::ArgWrite` where
+  `dst` is optional and defaults to `nothing` if not given. The `ArgRead` type is
+  a union including all the types that `arg_read` knows how to handle. Similarly,
+  the `ArgWrite` type is a union including the types that `arg_write` knows how to
+  handle, except for `nothing` which must be explicitly opted into, for which
+  `arg_write` creates a temporary file and returns its path.
+
+Taken altogether, this allows the `send_data` function to work with a combinatoral
+explosion of type signatures:
+
+* `send_data(src::AbstractString)`
+* `send_data(src::AbstractCmd)`
+* `send_data(src::IO)`
+* `send_data(src::AbstractString, dst::AbstractString)`
+* `send_data(src::AbstractCmd,    dst::AbstractString)`
+* `send_data(src::IO,             dst::AbstractString)`
+* `send_data(src::AbstractString, dst::AbstractCmd)`
+* `send_data(src::AbstractCmd,    dst::AbstractCmd)`
+* `send_data(src::IO,             dst::AbstractCmd)`
+* `send_data(src::AbstractString, dst::IO)`
+* `send_data(src::AbstractCmd,    dst::IO)`
+* `send_data(src::IO,             dst::IO)`
+
+Each combination guarantees the proper initialization and cleanup of its
+arguments whether it is opening a file and closing it upon completion or error,
+or creating a temporary output file and returning it upon completion or deleting
+it on error. If the arguments are commands or pipelines, those are correctly
+opened with the necessary read/write options.
+
+### Testing Example
+
+Now that we've defined the `send_data` function, we must test it. But it has so
+many different kinds of arguments that it can accept, how do we produce tests
+for all of these combinations? `ArgTools` also offers tools to help with testing
+APIs that it lets you define. The example tests assume that the above definition
+of `send_data` has already been evaluated in the same Julia session.
 
 ```jl
 using Test
