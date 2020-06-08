@@ -158,7 +158,7 @@ There is also an `arg_writers` method that takes a path name like `arg_readers`:
 arg_writers(path::AbstractString, [ type = ArgWrite ]) do arg::Function
     ## pre-test setup ##
     @arg_test arg begin
-        # here `arg :: ArgWrite`
+        arg :: ArgWrite
         ## test using `arg` ##
     end
     ## post-test cleanup ##
