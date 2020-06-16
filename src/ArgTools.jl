@@ -3,7 +3,7 @@ module ArgTools
 export
     arg_read,  ArgRead,  arg_readers,
     arg_write, ArgWrite, arg_writers,
-    @arg_test
+    arg_isdir, arg_mkdir, @arg_test
 
 import Base: AbstractCmd, CmdRedirect, Process
 
@@ -94,6 +94,37 @@ function arg_write(f::Function, arg::IO)
     try f(arg)
     finally
         flush(arg)
+    end
+    return arg
+end
+
+function arg_isdir(f::Function, arg::AbstractString)
+    isdir(arg) || error("arg_isdir: $(repr(arg)) not a directory")
+    return f(arg)
+end
+
+function arg_mkdir(f::Function, arg::Union{AbstractString, Nothing})
+    restore = false
+    if arg === nothing
+        arg = mktempdir()
+    else
+        st = stat(arg)
+        if !ispath(arg)
+            mkdir(arg)
+        elseif !isdir(arg)
+            error("arg_mkdir: $(repr(arg)) not a directory")
+        else
+            isempty(readdir(arg)) ||
+                error("arg_mkdir: $(repr(arg)) directory not empty")
+            restore = true
+        end
+    end
+    try f(arg)
+    catch
+        chmod(arg, 0o700, recursive=true)
+        rm(arg, force=true, recursive=true)
+        restore && mkdir(arg)
+        rethrow()
     end
     return arg
 end
