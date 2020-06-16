@@ -15,7 +15,7 @@ function send_data(src::ArgRead, dst::Union{ArgWrite, Nothing} = nothing)
     end
 end
 
-@testset "main API" begin
+@testset "arg_{read,write}" begin
     # create a source file
     src_file = tempname()
     data = rand(UInt8, 666)
@@ -93,5 +93,41 @@ import Base.Filesystem: TEMP_CLEANUP
         finally
             merge!(TEMP_CLEANUP, SAVE_TEMP_CLEANUP)
         end
+    end
+end
+
+@testset "arg_{is,mk}dir" begin
+    @testset "arg_isdir" begin
+        dir = tempname()
+        @test_throws ErrorException arg_isdir(identity, dir)
+        mkdir(dir)
+        @test "%$dir%" == arg_isdir(d -> "%$d%", dir)
+        rm(dir)
+    end
+
+    @testset "arg_mkdir" begin
+        dir = tempname()
+        @test dir == arg_mkdir(d -> "%$d%", dir)
+        @test isdir(dir)
+        @test dir == arg_mkdir(d -> "%$d%", dir)
+        touch(joinpath(dir, "file"))
+        @test_throws ErrorException arg_mkdir(identity, dir)
+        rm(dir, recursive=true)
+        file = tempname()
+        touch(file)
+        @test_throws ErrorException arg_mkdir(identity, file)
+        rm(file)
+        dir = arg_mkdir(d -> "%$d%", nothing)
+        @test isdir(dir)
+        rm(dir)
+        tmp = tempname()
+        @test_throws ErrorException arg_mkdir(tmp) do dir
+            @test dir == tmp
+            file = joinpath(dir, "file")
+            touch(file)
+            chmod(file, 0o000)
+            error("boof")
+        end
+        @test !ispath(tmp)
     end
 end
