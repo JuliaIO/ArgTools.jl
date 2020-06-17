@@ -104,7 +104,7 @@ function arg_isdir(f::Function, arg::AbstractString)
 end
 
 function arg_mkdir(f::Function, arg::Union{AbstractString, Nothing})
-    restore = false
+    existed = false
     if arg === nothing
         arg = mktempdir()
     else
@@ -116,14 +116,21 @@ function arg_mkdir(f::Function, arg::Union{AbstractString, Nothing})
         else
             isempty(readdir(arg)) ||
                 error("arg_mkdir: $(repr(arg)) directory not empty")
-            restore = true
+            existed = true
         end
     end
     try f(arg)
     catch
-        chmod(arg, 0o700, recursive=true)
-        rm(arg, force=true, recursive=true)
-        restore && mkdir(arg)
+        if existed
+            for name in readdir(arg)
+                path = joinpath(arg, name)
+                chmod(path, 0o700, recursive=true)
+                rm(path, force=true, recursive=true)
+            end
+        else
+            chmod(arg, 0o700, recursive=true)
+            rm(arg, force=true, recursive=true)
+        end
         rethrow()
     end
     return arg
