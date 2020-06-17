@@ -25,8 +25,9 @@ sure everything is working as intented.
 
 ### Argument Handling
 
-The API for helping defing flexible function signatures consists of two helper
-functions and two types: `arg_read`, `arg_write`, `ArgRead` and `ArgWrite`.
+The API for helping defing flexible function signatures consists of two types
+and four helper functions: `ArgRead` and `ArgWrite`; `arg_read`, `arg_write`,
+`arg_isdir` and `arg_mkdir`.
 
 <!-- BEGIN: copied from inline doc strings -->
 
@@ -35,7 +36,6 @@ functions and two types: `arg_read`, `arg_write`, `ArgRead` and `ArgWrite`.
 ```jl
 ArgRead = Union{AbstractString, AbstractCmd, IO}
 ```
-
 The `ArgRead` types is a union of the types that the `arg_read` function knows
 how to convert into readable IO handles. See [`arg_read`](@ref) for details.
 
@@ -44,7 +44,6 @@ how to convert into readable IO handles. See [`arg_read`](@ref) for details.
 ```jl
 ArgWrite = Union{AbstractString, AbstractCmd, IO}
 ```
-
 The `ArgWrite` types is a union of the types that the `arg_write` function knows
 how to convert into writeable IO handles, except for `Nothing` which `arg_write`
 handles by generating a temporary file. See [`arg_write`](@ref) for details.
@@ -54,7 +53,6 @@ handles by generating a temporary file. See [`arg_write`](@ref) for details.
 ```jl
 arg_read(f::Function, arg::ArgRead) -> f(arg_io)
 ```
-
 The `arg_read` function accepts an argument `arg` that can be any of these:
 
 - `AbstractString`: a file path to be opened for reading
@@ -71,7 +69,6 @@ flushed but not closed before returning from `arg_read`.
 arg_write(f::Function, arg::ArgWrite) -> arg
 arg_write(f::Function, arg::Nothing) -> tempname()
 ```
-
 The `arg_write` function accepts an argument `arg` that can be any of these:
 
 - `AbstractString`: a file path to be opened for writing
@@ -89,6 +86,33 @@ return whatever was written, whether an argument was passed or not.
 If there is an error during the evaluation of the body, a path that is opened by
 `arg_write` for writing will be deleted, whether it's passed in as a string or a
 temporary path generated when `arg` is `nothing`.
+
+#### arg_isdir
+
+```jl
+arg_isdir(f::Function, arg::AbstractString) -> f(arg)
+```
+The `arg_isdir` function takes `arg` which must be the path to an existing
+directory (an error is raised otherwise) and passes that path to `f` finally
+returning the result of `f(arg)`. This is definitely the least useful tool
+offered by `ArgTools` and mostly exists for symmetry with `arg_mkdir` and to
+give consistent error messages.
+
+#### arg_mkdir
+
+```jl
+arg_mkdir(f::Function, arg::AbstractString) -> arg
+arg_mkdir(f::Function, arg::Nothing) -> mktempdir()
+```
+The `arg_mkdir` function takes `arg` which must either be one of:
+
+- a path to an already existing empty directory,
+- a non-existent path which can be created as a directory, or
+- `nothing` in which case a temporary directory is created.
+
+In all cases the path to the directory is returned. If an error occurs during
+`f(arg)`, the directory is returned to its original state: if it already existed
+but was empty, it will be emptied; if it did not exist it will be deleted.
 
 <!-- END: copied from inline doc strings -->
 
