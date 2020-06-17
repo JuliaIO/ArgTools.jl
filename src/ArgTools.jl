@@ -109,9 +109,9 @@ function arg_mkdir(f::Function, arg::Union{AbstractString, Nothing})
         arg = mktempdir()
     else
         st = stat(arg)
-        if !ispath(arg)
+        if !ispath(st)
             mkdir(arg)
-        elseif !isdir(arg)
+        elseif !isdir(st)
             error("arg_mkdir: $(repr(arg)) not a directory")
         else
             isempty(readdir(arg)) ||
