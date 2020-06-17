@@ -107,19 +107,26 @@ end
 
     @testset "arg_mkdir" begin
         dir = tempname()
+        # creates a non-existent directory
         @test dir == arg_mkdir(d -> "%$d%", dir)
         @test isdir(dir)
+        # accepts a pre-existing empty directory
         @test dir == arg_mkdir(d -> "%$d%", dir)
+        @test isdir(dir)
+        # refuses a non-empty directory
         touch(joinpath(dir, "file"))
         @test_throws ErrorException arg_mkdir(identity, dir)
         rm(dir, recursive=true)
+        # refuses a non-directory
         file = tempname()
         touch(file)
         @test_throws ErrorException arg_mkdir(identity, file)
         rm(file)
+        # creates a temporary directory
         dir = arg_mkdir(d -> "%$d%", nothing)
         @test isdir(dir)
         rm(dir)
+        # on error, restores (deletes) a non-existent directory
         tmp = tempname()
         @test_throws ErrorException arg_mkdir(tmp) do dir
             @test dir == tmp
@@ -129,5 +136,21 @@ end
             error("boof")
         end
         @test !ispath(tmp)
+        # on error, restores (empties) an empty directory
+        mkdir(tmp)
+        chmod(tmp, 0o741)
+        st = stat(tmp)
+        file = joinpath(tmp, "file")
+        @test_throws ErrorException arg_mkdir(tmp) do dir
+            @test dir == tmp
+            touch(file)
+            chmod(file, 0o000)
+            error("blammo")
+        end
+        @test !ispath(file)
+        @test isdir(tmp)
+        @test isempty(readdir(tmp))
+        @test filemode(tmp) == filemode(st)
+        @test Base.Filesystem.samefile(st, stat(tmp))
     end
 end

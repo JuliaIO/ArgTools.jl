@@ -98,32 +98,62 @@ function arg_write(f::Function, arg::IO)
     return arg
 end
 
+"""
+    arg_isdir(f::Function, arg::AbstractString) -> f(arg)
+
+The `arg_isdir` function takes `arg` which must be the path to an existing
+directory (an error is raised otherwise) and passes that path to `f` finally
+returning the result of `f(arg)`. This is definitely the least useful tool
+offered by `ArgTools` and mostly exists for symmetry with `arg_mkdir` and to
+give consistent error messages.
+"""
 function arg_isdir(f::Function, arg::AbstractString)
     isdir(arg) || error("arg_isdir: $(repr(arg)) not a directory")
     return f(arg)
 end
 
+"""
+    arg_mkdir(f::Function, arg::AbstractString) -> arg
+    arg_mkdir(f::Function, arg::Nothing) -> mktempdir()
+
+The `arg_mkdir` function takes `arg` which must either be one of:
+
+- a path to an already existing empty directory,
+- a non-existent path which can be created as a directory, or
+- `nothing` in which case a temporary directory is created.
+
+In all cases the path to the directory is returned. If an error occurs during
+`f(arg)`, the directory is returned to its original state: if it already existed
+but was empty, it will be emptied; if it did not exist it will be deleted.
+"""
 function arg_mkdir(f::Function, arg::Union{AbstractString, Nothing})
-    restore = false
+    existed = false
     if arg === nothing
         arg = mktempdir()
     else
         st = stat(arg)
-        if !ispath(arg)
+        if !ispath(st)
             mkdir(arg)
-        elseif !isdir(arg)
+        elseif !isdir(st)
             error("arg_mkdir: $(repr(arg)) not a directory")
         else
             isempty(readdir(arg)) ||
                 error("arg_mkdir: $(repr(arg)) directory not empty")
-            restore = true
+            existed = true
         end
     end
     try f(arg)
     catch
-        chmod(arg, 0o700, recursive=true)
-        rm(arg, force=true, recursive=true)
-        restore && mkdir(arg)
+        if existed
+            for name in readdir(arg)
+                path = joinpath(arg, name)
+                chmod(path, 0o700, recursive=true)
+                rm(path, force=true, recursive=true)
+            end
+        else
+            chmod(arg, 0o700, recursive=true)
+            rm(arg, force=true, recursive=true)
+        end
         rethrow()
     end
     return arg
