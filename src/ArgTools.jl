@@ -7,17 +7,20 @@ export
 
 import Base: AbstractCmd, CmdRedirect, Process
 
-if isdefined(Base, :prepare_for_deletion)
-    using Base: prepare_for_deletion
+if isdefined(Base.Filesystem, :prepare_for_deletion)
+    using Base.Filesystem: prepare_for_deletion
 else
     function prepare_for_deletion(path::AbstractString)
-        isdir(path) || return
-        try chmod(path, filemode(path) | 0o333)
+        try prepare_for_deletion_core(path)
         catch
         end
+    end
+    function prepare_for_deletion_core(path::AbstractString)
+        isdir(path) || return
+        chmod(path, filemode(path) | 0o333)
         for name in readdir(path)
             path′ = joinpath(path, name)
-            prepare_for_deletion(path′)
+            prepare_for_deletion_core(path′)
         end
     end
 end
