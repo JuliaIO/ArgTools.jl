@@ -7,6 +7,21 @@ export
 
 import Base: AbstractCmd, CmdRedirect, Process
 
+if isdefined(Base, :prepare_for_deletion)
+    using Base: prepare_for_deletion
+else
+    function prepare_for_deletion(path::AbstractString)
+        isdir(path) || return
+        try chmod(path, filemode(path) | 0o333)
+        catch
+        end
+        for name in readdir(path)
+            path′ = joinpath(path, name)
+            prepare_for_deletion(path′)
+        end
+    end
+end
+
 ## main API ##
 
 """
@@ -147,11 +162,11 @@ function arg_mkdir(f::Function, arg::Union{AbstractString, Nothing})
         if existed
             for name in readdir(arg)
                 path = joinpath(arg, name)
-                chmod(path, 0o700, recursive=true)
+                prepare_for_deletion(path)
                 rm(path, force=true, recursive=true)
             end
         else
-            chmod(arg, 0o700, recursive=true)
+            prepare_for_deletion(arg)
             rm(arg, force=true, recursive=true)
         end
         rethrow()
