@@ -137,7 +137,7 @@ end
         end
         @test !ispath(tmp)
         # on error, restores (empties) an empty directory
-        mkdir(tmp)
+        tmp = mktempdir()
         chmod(tmp, 0o741)
         st = stat(tmp)
         file = joinpath(tmp, "file")
@@ -152,5 +152,6 @@ end
         @test isempty(readdir(tmp))
         @test filemode(tmp) == filemode(st)
         @test Base.Filesystem.samefile(st, stat(tmp))
+        rm(tmp)
     end
 end
