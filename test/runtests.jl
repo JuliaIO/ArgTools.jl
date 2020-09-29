@@ -96,6 +96,9 @@ import Base.Filesystem: TEMP_CLEANUP
     end
 end
 
+# broken on Julia CI when testing as a stdlib on Windows
+const chmod_0o000 = !Sys.iswindows() || Main == @__MODULE__
+
 @testset "arg_{is,mk}dir" begin
     @testset "arg_isdir" begin
         dir = tempname()
@@ -132,6 +135,7 @@ end
             @test dir == tmp
             file = joinpath(dir, "file")
             touch(file)
+            chmod_0o000 &&
             chmod(file, 0o000)
             error("boof")
         end
@@ -144,6 +148,7 @@ end
         @test_throws ErrorException arg_mkdir(tmp) do dir
             @test dir == tmp
             touch(file)
+            chmod_0o000 &&
             chmod(file, 0o000)
             error("blammo")
         end
