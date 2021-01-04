@@ -17,15 +17,15 @@ There are two parts to the `ArgTools` API:
 1. Functions and types for helping define flexible function APIs.
 2. Functions for helping to test APIs defined with above.
 
-While it's great to be able to define a flexibile API, if you're not sure that
+While it's great to be able to define a flexible API, if you're not sure that
 it works the way it's supposed to, what's the benefit. Since it's can be quite
 verbose to test such a combinatorial explosion of methods, `ArgTools` also
 provides tools to help testing all the ways your tools can be called to make
-sure everything is working as intented.
+sure everything is working as intended.
 
 ### Argument Handling
 
-The API for helping defing flexible function signatures consists of two types
+The API for helping defining flexible function signatures consists of two types
 and four helper functions: `ArgRead` and `ArgWrite`; `arg_read`, `arg_write`,
 `arg_isdir` and `arg_mkdir`.
 
@@ -289,7 +289,7 @@ To understand the definition of `send_data`, let's work from the inside out:
   handle, except for `nothing` which must be explicitly opted into, for which
   `arg_write` creates a temporary file and returns its path.
 
-Taken altogether, this allows the `send_data` function to work with a combinatoral
+Taken altogether, this allows the `send_data` function to work with a combinatorial
 explosion of type signatures:
 
 * `send_data(src::AbstractString)`
@@ -424,7 +424,7 @@ There are two reasons:
    will not work reliably inside of the `@arg_test` block: data is not guaranteed
    to have been fully written to `dst_file` until `dst` is finalized. This is an
    issue when `dst` is an already-opened process, for example: `arg_write` leaves
-   the process open since it recieved it that way (you might want to write more
+   the process open since it received it that way (you might want to write more
    data to it), and while it does flush the handle, there is no guarantee that
    the process will get data to its final destination until the process has
    exited. Putting the test after the `@arg_test` block ensures that the process
