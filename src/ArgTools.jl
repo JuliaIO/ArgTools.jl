@@ -25,6 +25,12 @@ else
     end
 end
 
+if VERSION ≥ v"1.5"
+    open_nolock(args...; kws...) = open(args...; kws..., lock=false)
+else
+    open_nolock(args...; kws...) = open(args...; kws...)
+end
+
 ## main API ##
 
 """
@@ -57,6 +63,7 @@ Whether the body returns normally or throws an error, a path which is opened
 will be closed before returning from `arg_read` and an `IO` handle will be
 flushed but not closed before returning from `arg_read`.
 """
+arg_read(f::Function, arg::AbstractString) = open_nolock(f, arg)
 arg_read(f::Function, arg::ArgRead) = open(f, arg)
 arg_read(f::Function, arg::IO) = f(arg)
 
@@ -83,7 +90,7 @@ If there is an error during the evaluation of the body, a path that is opened by
 temporary path generated when `arg` is `nothing`.
 """
 function arg_write(f::Function, arg::AbstractString)
-    try open(f, arg, write=true)
+    try open_nolock(f, arg, write=true)
     catch
         rm(arg, force=true)
         rethrow()
@@ -97,7 +104,12 @@ function arg_write(f::Function, arg::AbstractCmd)
 end
 
 function arg_write(f::Function, arg::Nothing)
-    file, io = mktemp()
+    @static if VERSION ≥ v"1.5"
+        file = tempname()
+        io = open_nolock(file, write=true)
+    else
+        file, io = mktemp()
+    end
     try f(io)
     catch
         close(io)
