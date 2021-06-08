@@ -67,6 +67,38 @@ end
     rm(src_file)
 end
 
+@testset "lock keyword" begin
+    @testset "arg_read" begin
+        path = tempname()
+        touch(path)
+        arg_readers(path) do arg
+            for lock in false:true
+                @arg_test arg begin
+                    arg_read(arg, lock=lock) do io
+                        if arg isa IOStream
+                            @test io._dolock == lock
+                        end
+                    end
+                end
+            end
+        end
+        rm(path)
+    end
+    @testset "arg_write" begin
+        arg_writers() do path, arg
+            for lock in false:true
+                @arg_test arg begin
+                    arg_write(arg, lock=lock) do io
+                        if arg isa IOStream
+                            @test io._dolock == lock
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
 ## for testing error handling ##
 
 struct ErrIO <: IO end

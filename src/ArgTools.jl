@@ -26,9 +26,9 @@ else
 end
 
 if VERSION ≥ v"1.5"
-    open_nolock(args...; kws...) = open(args...; kws..., lock=false)
+    open_lock(args...; lock::Bool=true, kws...) = open(args...; lock=lock, kws...)
 else
-    open_nolock(args...; kws...) = open(args...; kws...)
+    open_lock(args...; lock::Bool=true, kws...) = open(args...; kws...)
 end
 
 ## main API ##
@@ -51,7 +51,7 @@ handles by generating a temporary file. See [`arg_write`](@ref) for details.
 const ArgWrite = Union{AbstractString, AbstractCmd, IO}
 
 """
-    arg_read(f::Function, arg::ArgRead) -> f(arg_io)
+    arg_read(f::Function, arg::ArgRead; lock::Bool=true) -> f(arg_io)
 
 The `arg_read` function accepts an argument `arg` that can be any of these:
 
@@ -62,14 +62,32 @@ The `arg_read` function accepts an argument `arg` that can be any of these:
 Whether the body returns normally or throws an error, a path which is opened
 will be closed before returning from `arg_read` and an `IO` handle will be
 flushed but not closed before returning from `arg_read`.
+
+If `lock=false` is passed, then any `IOStream` will be used without locking,
+which can be a significant performance improvement. You should, however, only
+turn locking off if `f` uses its I/O argument in a threadsafe manner.
 """
-arg_read(f::Function, arg::AbstractString) = open_nolock(f, arg)
-arg_read(f::Function, arg::ArgRead) = open(f, arg)
-arg_read(f::Function, arg::IO) = f(arg)
+arg_read(f::Function, arg::AbstractString; lock::Bool=true) =
+    open_lock(f, arg, lock=lock)
+arg_read(f::Function, arg::ArgRead; lock::Bool=true) = open(f, arg)
+arg_read(f::Function, arg::IO; lock::Bool=true) = f(arg)
+
+VERSION ≥ v"1.5" &&
+function arg_read(f::Function, arg::IOStream; lock::Bool=true)
+    arg_dolock = arg._dolock
+    arg._dolock = lock
+    try # take outer lock if !lock
+        lock || Base.lock(arg)
+        f(arg)
+    finally
+        lock || unlock(arg)
+        arg._dolock = arg_dolock
+    end
+end
 
 """
-    arg_write(f::Function, arg::ArgWrite) -> arg
-    arg_write(f::Function, arg::Nothing) -> tempname()
+    arg_write(f::Function, arg::ArgWrite; lock::Bool=true) -> arg
+    arg_write(f::Function, arg::Nothing; lock::Bool=true) -> tempname()
 
 The `arg_read` function accepts an argument `arg` that can be any of these:
 
@@ -88,9 +106,13 @@ return whatever was written, whether an argument was passed or not.
 If there is an error during the evaluation of the body, a path that is opened by
 `arg_write` for writing will be deleted, whether it's passed in as a string or a
 temporary path generated when `arg` is `nothing`.
+
+If `lock=false` is passed, then any `IOStream` will be used without locking,
+which can be a significant performance improvement. You should, however, only
+turn locking off if `f` uses its I/O argument in a threadsafe manner.
 """
-function arg_write(f::Function, arg::AbstractString)
-    try open_nolock(f, arg, write=true)
+function arg_write(f::Function, arg::AbstractString; lock::Bool=true)
+    try open_lock(f, arg, write=true, lock=lock)
     catch
         rm(arg, force=true)
         rethrow()
@@ -98,15 +120,15 @@ function arg_write(f::Function, arg::AbstractString)
     return arg
 end
 
-function arg_write(f::Function, arg::AbstractCmd)
+function arg_write(f::Function, arg::AbstractCmd; lock::Bool=true)
     open(f, arg, write=true)
     return arg
 end
 
-function arg_write(f::Function, arg::Nothing)
+function arg_write(f::Function, arg::Nothing; lock::Bool=true)
     @static if VERSION ≥ v"1.5"
         file = tempname()
-        io = open_nolock(file, write=true)
+        io = open_lock(file, write=true, lock=lock)
     else
         file, io = mktemp()
     end
@@ -120,10 +142,26 @@ function arg_write(f::Function, arg::Nothing)
     return file
 end
 
-function arg_write(f::Function, arg::IO)
-    try f(arg)
+function arg_write(f::Function, arg::IO; lock::Bool=true)
+    try
+        f(arg)
     finally
         flush(arg)
+    end
+    return arg
+end
+
+VERSION ≥ v"1.5" &&
+function arg_write(f::Function, arg::IOStream; lock::Bool=true)
+    arg_dolock = arg._dolock
+    arg._dolock = lock
+    try # take outer lock if !lock
+        lock || Base.lock(arg)
+        f(arg)
+    finally
+        flush(arg)
+        lock || unlock(arg)
+        arg._dolock = arg_dolock
     end
     return arg
 end
