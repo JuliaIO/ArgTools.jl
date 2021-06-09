@@ -74,14 +74,13 @@ arg_read(f::Function, arg::IO; lock::Bool=true) = f(arg)
 
 VERSION ≥ v"1.5" &&
 function arg_read(f::Function, arg::IOStream; lock::Bool=true)
-    arg_dolock = arg._dolock
-    arg._dolock = lock
-    try # take outer lock if !lock
-        lock || Base.lock(arg)
+    # confusing, lock=true means `f` is potentially multi-threaded (therefore locking here is bad, and will also disable finalizers)
+    # while lock=false means it is single-threaded (so locking here is good hygiene, though it may disable finalizers)
+    lock || Base.lock(arg)
+    try
         f(arg)
     finally
         lock || unlock(arg)
-        arg._dolock = arg_dolock
     end
 end
 
