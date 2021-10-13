@@ -25,6 +25,12 @@ else
     end
 end
 
+const nolock_docstring = """
+Note: when opening a file, ArgTools will pass `lock = false` to the file `open(...)` call.
+Therefore, the object returned by this function should not be used from multiple threads.
+This restriction may be relaxed in the future, which would not break any working code.
+"""
+
 if VERSION ≥ v"1.5"
     open_nolock(args...; kws...) = open(args...; kws..., lock=false)
 else
@@ -62,6 +68,8 @@ The `arg_read` function accepts an argument `arg` that can be any of these:
 Whether the body returns normally or throws an error, a path which is opened
 will be closed before returning from `arg_read` and an `IO` handle will be
 flushed but not closed before returning from `arg_read`.
+
+$(nolock_docstring)
 """
 arg_read(f::Function, arg::AbstractString) = open_nolock(f, arg)
 arg_read(f::Function, arg::ArgRead) = open(f, arg)
@@ -88,6 +96,8 @@ return whatever was written, whether an argument was passed or not.
 If there is an error during the evaluation of the body, a path that is opened by
 `arg_write` for writing will be deleted, whether it's passed in as a string or a
 temporary path generated when `arg` is `nothing`.
+
+$(nolock_docstring)
 """
 function arg_write(f::Function, arg::AbstractString)
     try open_nolock(f, arg, write=true)
