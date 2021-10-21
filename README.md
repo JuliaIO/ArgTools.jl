@@ -1,5 +1,6 @@
 # ArgTools
 
+[![Build Status](https://github.com/JuliaIO/ArgTools.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/JuliaIO/ArgTools.jl/actions/workflows/ci.yml)
 [![Codecov](https://codecov.io/gh/JuliaIO/ArgTools.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaIO/ArgTools.jl)
 
 `ArgTools` provides tools for creating consistent, flexible APIs that work with
