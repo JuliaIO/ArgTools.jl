@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaIO/ArgTools.jl/blob/master/docs/src/index.md"
+```
+
 # ArgTools
 
 ## Argument Handling
