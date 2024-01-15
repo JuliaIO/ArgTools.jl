@@ -83,15 +83,36 @@ import Base.Filesystem: TEMP_CLEANUP
         @test_throws ErrorException send_data(ErrIO(), dst)
         @test !isfile(dst)
     end
-    @testset "arg_write(nothing)" begin
-        SAVE_TEMP_CLEANUP = copy(TEMP_CLEANUP)
-        empty!(TEMP_CLEANUP)
-        try
-            @test_throws ErrorException send_data(ErrIO())
-            @test length(TEMP_CLEANUP) == 1
-            @test !ispath(first(keys(TEMP_CLEANUP)))
-        finally
-            merge!(TEMP_CLEANUP, SAVE_TEMP_CLEANUP)
+    # post-https://github.com/JuliaLang/julia/pull/52898 we need to acquire
+    # the lock and unpack `TEMP_CLEANUP` to use it.
+    if isdefined(Base, :Lockable) && TEMP_CLEANUP isa Base.Lockable
+        @testset "arg_write(nothing)" begin
+            local SAVE_TEMP_CLEANUP
+            @lock TEMP_CLEANUP begin
+                SAVE_TEMP_CLEANUP = copy(TEMP_CLEANUP[])
+                empty!(TEMP_CLEANUP[])
+            end
+            try
+                @test_throws ErrorException send_data(ErrIO())
+                @lock TEMP_CLEANUP begin
+                    @test length(TEMP_CLEANUP[]) == 1
+                    @test !ispath(first(keys(TEMP_CLEANUP[])))
+                end
+            finally
+                @lock TEMP_CLEANUP merge!(TEMP_CLEANUP[], SAVE_TEMP_CLEANUP)
+            end
+        end
+    else
+        @testset "arg_write(nothing)" begin
+            SAVE_TEMP_CLEANUP = copy(TEMP_CLEANUP)
+            empty!(TEMP_CLEANUP)
+            try
+                @test_throws ErrorException send_data(ErrIO())
+                @test length(TEMP_CLEANUP) == 1
+                @test !ispath(first(keys(TEMP_CLEANUP)))
+            finally
+                merge!(TEMP_CLEANUP, SAVE_TEMP_CLEANUP)
+            end
         end
     end
 end
