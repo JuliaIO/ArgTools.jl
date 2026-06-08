@@ -25,9 +25,9 @@ sure everything is working as intended.
 
 ### Argument Handling
 
-The API for helping defining flexible function signatures consists of two types
-and four helper functions: `ArgRead` and `ArgWrite`; `arg_read`, `arg_write`,
-`arg_isdir` and `arg_mkdir`.
+The API for helping defining flexible function signatures consists of three
+types and four helper functions: `ArgRead`, `ArgWrite` and `FileSpec`;
+`arg_read`, `arg_write`, `arg_isdir` and `arg_mkdir`.
 
 <!-- BEGIN: copied from inline doc strings -->
 
@@ -42,11 +42,22 @@ how to convert into readable IO handles. See [`arg_read`](@ref) for details.
 #### ArgWrite
 
 ```jl
-ArgWrite = Union{AbstractString, AbstractCmd, IO}
+ArgWrite = Union{AbstractString, AbstractCmd, IO, FileSpec}
 ```
 The `ArgWrite` types is a union of the types that the `arg_write` function knows
 how to convert into writeable IO handles, except for `Nothing` which `arg_write`
 handles by generating a temporary file. See [`arg_write`](@ref) for details.
+
+#### FileSpec
+
+```jl
+FileSpec(path::AbstractString, [ mode::Integer = 0o666 ])
+FileSpec(path::AbstractString; [ mode::Integer = 0o666 ])
+```
+
+A `FileSpec` represents a file path and additional options used by
+`arg_write`. The file will be opened for writing with the specified access
+`mode`, modified by the process umask.
 
 #### arg_read
 
@@ -67,11 +78,13 @@ flushed but not closed before returning from `arg_read`.
 
 ```jl
 arg_write(f::Function, arg::ArgWrite) -> arg
+arg_write(f::Function, arg::FileSpec) -> arg.path
 arg_write(f::Function, arg::Nothing) -> tempname()
 ```
 The `arg_write` function accepts an argument `arg` that can be any of these:
 
 - `AbstractString`: a file path to be opened for writing
+- `FileSpec`: a file path and options to be used when opening for writing
 - `AbstractCmd`: a command to be run, writing to its standard input
 - `IO`: an open IO handle to be written to
 - `Nothing`: a temporary path should be written to
@@ -79,9 +92,10 @@ The `arg_write` function accepts an argument `arg` that can be any of these:
 If the body returns normally, a path that is opened will be closed upon
 completion; an IO handle argument is left open but flushed before return. If the
 argument is `nothing` then a temporary path is opened for writing and closed
-open completion and the path is returned from `arg_write`. In all other cases,
-`arg` itself is returned. This is a useful pattern since you can consistently
-return whatever was written, whether an argument was passed or not.
+open completion and the path is returned from `arg_write`. If the argument is a
+`FileSpec`, then its path is returned. In all other cases, `arg` itself is
+returned. This is a useful pattern since you can consistently return whatever
+was written, whether an argument was passed or not.
 
 If there is an error during the evaluation of the body, a path that is opened by
 `arg_write` for writing will be deleted, whether it's passed in as a string or a

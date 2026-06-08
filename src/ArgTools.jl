@@ -3,7 +3,7 @@ module ArgTools
 export
     arg_read,  ArgRead,  arg_readers,
     arg_write, ArgWrite, arg_writers,
-    arg_isdir, arg_mkdir, @arg_test
+    arg_isdir, arg_mkdir, FileSpec, @arg_test
 
 import Base: AbstractCmd, CmdRedirect, Process
 
@@ -48,13 +48,31 @@ how to convert into readable IO handles. See [`arg_read`](@ref) for details.
 const ArgRead = Union{AbstractString, AbstractCmd, IO}
 
 """
-    ArgWrite = Union{AbstractString, AbstractCmd, IO}
+    FileSpec(path::AbstractString, [ mode::Integer = 0o666 ])
+    FileSpec(path::AbstractString; [ mode::Integer = 0o666 ])
+
+A `FileSpec` represents a file path and additional options used by
+[`arg_write`](@ref). The file will be opened for writing with the specified
+access `mode`, modified by the process umask.
+"""
+struct FileSpec
+    path::String
+    mode::UInt16
+
+    FileSpec(path::AbstractString, mode::Integer) =
+        new(String(path), UInt16(Base.Filesystem.checkmode(mode)))
+end
+
+FileSpec(path::AbstractString; mode::Integer = 0o666) = FileSpec(path, mode)
+
+"""
+    ArgWrite = Union{AbstractString, AbstractCmd, IO, FileSpec}
 
 The `ArgWrite` types is a union of the types that the `arg_write` function knows
 how to convert into writeable IO handles, except for `Nothing` which `arg_write`
 handles by generating a temporary file. See [`arg_write`](@ref) for details.
 """
-const ArgWrite = Union{AbstractString, AbstractCmd, IO}
+const ArgWrite = Union{AbstractString, AbstractCmd, IO, FileSpec}
 
 """
     arg_read(f::Function, arg::ArgRead) -> f(arg_io)
@@ -77,11 +95,13 @@ arg_read(f::Function, arg::IO) = f(arg)
 
 """
     arg_write(f::Function, arg::ArgWrite) -> arg
+    arg_write(f::Function, arg::FileSpec) -> arg.path
     arg_write(f::Function, arg::Nothing) -> tempname()
 
 The `arg_write` function accepts an argument `arg` that can be any of these:
 
 - `AbstractString`: a file path to be opened for writing
+- `FileSpec`: a file path and options to be used when opening for writing
 - `AbstractCmd`: a command to be run, writing to its standard input
 - `IO`: an open IO handle to be written to
 - `Nothing`: a temporary path should be written to
@@ -89,9 +109,10 @@ The `arg_write` function accepts an argument `arg` that can be any of these:
 If the body returns normally, a path that is opened will be closed upon
 completion; an IO handle argument is left open but flushed before return. If the
 argument is `nothing` then a temporary path is opened for writing and closed
-open completion and the path is returned from `arg_write`. In all other cases,
-`arg` itself is returned. This is a useful pattern since you can consistently
-return whatever was written, whether an argument was passed or not.
+open completion and the path is returned from `arg_write`. If the argument is a
+`FileSpec`, then its path is returned. In all other cases, `arg` itself is
+returned. This is a useful pattern since you can consistently return whatever
+was written, whether an argument was passed or not.
 
 If there is an error during the evaluation of the body, a path that is opened by
 `arg_write` for writing will be deleted, whether it's passed in as a string or a
@@ -106,6 +127,27 @@ function arg_write(f::Function, arg::AbstractString)
         rethrow()
     end
     return arg
+end
+
+function arg_write(f::Function, arg::FileSpec)
+    try
+        io = Base.Filesystem.open(
+            arg.path,
+            Base.Filesystem.JL_O_WRONLY |
+            Base.Filesystem.JL_O_CREAT |
+            Base.Filesystem.JL_O_TRUNC,
+            arg.mode,
+        )
+        try
+            f(io)
+        finally
+            close(io)
+        end
+    catch
+        rm(arg.path, force=true)
+        rethrow()
+    end
+    return arg.path
 end
 
 function arg_write(f::Function, arg::AbstractCmd)
@@ -211,6 +253,7 @@ const ARG_READERS = [
 
 const ARG_WRITERS = [
     String      => path -> f -> f(path)
+    FileSpec    => path -> f -> f(FileSpec(path))
     Cmd         => path -> f -> f(`tee $path`)
     CmdRedirect => path -> f -> f(pipeline(`cat`, path))
     IOStream    => path -> f -> open(f, path, write=true)

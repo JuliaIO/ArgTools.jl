@@ -15,6 +15,8 @@ function send_data(src::ArgRead, dst::Union{ArgWrite, Nothing} = nothing)
     end
 end
 
+expected_arg(arg) = arg isa FileSpec ? arg.path : arg
+
 @testset "arg_{read,write}" begin
     # create a source file
     src_file = tempname()
@@ -23,10 +25,11 @@ end
 
     # record what we want to test
     signatures = Set()
-    types = [String, Cmd, Base.CmdRedirect, IOStream, Base.Process]
-    for S in types
+    read_types = [String, Cmd, Base.CmdRedirect, IOStream, Base.Process]
+    write_types = [read_types..., FileSpec]
+    for S in read_types
         push!(signatures, Tuple{S})
-        for D in types
+        for D in write_types
             push!(signatures, Tuple{S,D})
         end
     end
@@ -43,7 +46,7 @@ end
             @test !ispath(dst_file)
             @arg_test src dst begin
                 pop!(signatures, Tuple{typeof(src), typeof(dst)})
-                @test dst == send_data(src, dst)
+                @test expected_arg(dst) == send_data(src, dst)
             end
             @test data == read(dst_file)
         end
@@ -53,11 +56,36 @@ end
         arg_writers(dst_file) do dst
             @test !ispath(dst_file)
             @arg_test src dst begin
-                @test dst == send_data(src, dst)
+                @test expected_arg(dst) == send_data(src, dst)
             end
             @test data == read(dst_file)
             rm(dst_file)
         end
+    end
+
+    @testset "arg_write(FileSpec)" begin
+        dst_file = tempname()
+        mode = 0o600
+        expected = Sys.iswindows() ? 0o666 : mode
+        @test FileSpec(dst_file; mode).mode === UInt16(mode)
+        @test dst_file == arg_write(FileSpec(dst_file; mode)) do dst_io
+            write(dst_io, data)
+        end
+        @test data == read(dst_file)
+        @test filemode(dst_file) & 0o777 == expected
+        rm(dst_file)
+
+        dst_file = tempname()
+        write(dst_file, "old")
+        old_mode = filemode(dst_file) & 0o777
+        @test dst_file == arg_write(FileSpec(dst_file; mode)) do dst_io
+            write(dst_io, data)
+        end
+        @test data == read(dst_file)
+        @test filemode(dst_file) & 0o777 == old_mode
+        rm(dst_file)
+
+        @test_throws ArgumentError FileSpec(tempname(); mode=0o1000)
     end
 
     # test that we tested all signatures
@@ -81,6 +109,11 @@ import Base.Filesystem: TEMP_CLEANUP
     @testset "arg_write(path)" begin
         dst = tempname()
         @test_throws ErrorException send_data(ErrIO(), dst)
+        @test !isfile(dst)
+    end
+    @testset "arg_write(FileSpec)" begin
+        dst = tempname()
+        @test_throws ErrorException send_data(ErrIO(), FileSpec(dst))
         @test !isfile(dst)
     end
     # post-https://github.com/JuliaLang/julia/pull/52898 we need to acquire
