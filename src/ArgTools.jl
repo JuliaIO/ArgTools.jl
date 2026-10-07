@@ -243,21 +243,21 @@ end
 
 ## test utilities ##
 
-const ARG_READERS = [
-    String      => path -> f -> f(path)
-    Cmd         => path -> f -> f(`cat $path`)
-    CmdRedirect => path -> f -> f(pipeline(path, `cat`))
-    IOStream    => path -> f -> open(f, path)
-    Process     => path -> f -> open(f, `cat $path`)
+const ARG_READERS = Pair{Type,Function}[
+    String      => path -> f -> f(path),
+    Cmd         => path -> f -> f(`cat $path`),
+    CmdRedirect => path -> f -> f(pipeline(path, `cat`)),
+    IOStream    => path -> f -> open(f, path),
+    Process     => path -> f -> open(f, `cat $path`),
 ]
 
-const ARG_WRITERS = [
-    String      => path -> f -> f(path)
-    FileSpec    => path -> f -> f(FileSpec(path))
-    Cmd         => path -> f -> f(`tee $path`)
-    CmdRedirect => path -> f -> f(pipeline(`cat`, path))
-    IOStream    => path -> f -> open(f, path, write=true)
-    Process     => path -> f -> open(f, pipeline(`cat`, path), write=true)
+const ARG_WRITERS = Pair{Type,Function}[
+    String      => path -> f -> f(path),
+    FileSpec    => path -> f -> f(FileSpec(path)),
+    Cmd         => path -> f -> f(`tee $path`),
+    CmdRedirect => path -> f -> f(pipeline(`cat`, path)),
+    IOStream    => path -> f -> open(f, path, write=true),
+    Process     => path -> f -> open(f, pipeline(`cat`, path), write=true),
 ]
 
 @assert all(t <: ArgRead  for t in map(first, ARG_READERS))
