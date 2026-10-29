@@ -214,3 +214,29 @@ const chmod_0o000 = !Sys.iswindows() || Main == @__MODULE__
         rm(tmp)
     end
 end
+
+# a `Function` argument that a method only passes on is not specialized on by default,
+# so the callback would be called dynamically; checked in a fresh process, since inference
+# and reflection elsewhere may compile methods for `Function` arguments
+if VERSION ≥ v"1.10" # Base.specializations
+    @testset "callback specialization" begin
+        code = raw"""
+        using ArgTools
+        path = tempname()
+        arg_write(io -> write(io, "data"), path)
+        arg_write(io -> write(io, "data"), pipeline(`$(Base.julia_cmd()) -e 'read(stdin)'`, devnull))
+        arg_read(io -> read(io, String), path)
+        arg_read(io -> read(io, String), `$(Base.julia_cmd()) -e 'print("data")'`)
+        rm(path)
+        unspecialized = [mi.specTypes for f in (arg_read, arg_write, ArgTools.open_nolock)
+                         for m in methods(f) for mi in Base.specializations(m)
+                         if mi.specTypes.parameters[2] === Function]
+        print(isempty(unspecialized) ? "none" : unspecialized)
+        """
+        project = Base.active_project()
+        project_flag = project === nothing ? `` : `--project=$project`
+        cmd = `$(Base.julia_cmd()) --startup-file=no $project_flag -e $code`
+        load_path = join(LOAD_PATH, Sys.iswindows() ? ';' : ':')
+        @test "none" == read(addenv(cmd, "JULIA_LOAD_PATH" => load_path), String)
+    end
+end

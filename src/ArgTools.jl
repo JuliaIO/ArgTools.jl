@@ -31,10 +31,15 @@ Therefore, the object returned by this function should not be used from multiple
 This restriction may be relaxed in the future, which would not break any working code.
 """
 
+# Callbacks that are only passed on are typed `f::F where {F<:Function}`: Julia does not
+# specialize a method on a `Function` argument it does not call, which would make the call
+# of `f` dynamic.
 if VERSION ≥ v"1.5"
     open_nolock(args...; kws...) = open(args...; kws..., lock=false)
+    open_nolock(f::F, args...; kws...) where {F<:Function} = open(f, args...; kws..., lock=false)
 else
     open_nolock(args...; kws...) = open(args...; kws...)
+    open_nolock(f::F, args...; kws...) where {F<:Function} = open(f, args...; kws...)
 end
 
 ## main API ##
@@ -89,8 +94,8 @@ flushed but not closed before returning from `arg_read`.
 
 $(nolock_docstring)
 """
-arg_read(f::Function, arg::AbstractString) = open_nolock(f, arg)
-arg_read(f::Function, arg::ArgRead) = open(f, arg)
+arg_read(f::F, arg::AbstractString) where {F<:Function} = open_nolock(f, arg)
+arg_read(f::F, arg::ArgRead) where {F<:Function} = open(f, arg)
 arg_read(f::Function, arg::IO) = f(arg)
 
 """
@@ -120,7 +125,7 @@ temporary path generated when `arg` is `nothing`.
 
 $(nolock_docstring)
 """
-function arg_write(f::Function, arg::AbstractString)
+function arg_write(f::F, arg::AbstractString) where {F<:Function}
     try open_nolock(f, arg, write=true)
     catch
         rm(arg, force=true)
@@ -150,7 +155,7 @@ function arg_write(f::Function, arg::FileSpec)
     return arg.path
 end
 
-function arg_write(f::Function, arg::AbstractCmd)
+function arg_write(f::F, arg::AbstractCmd) where {F<:Function}
     open(f, arg, write=true)
     return arg
 end
